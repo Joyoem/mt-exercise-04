@@ -89,17 +89,15 @@ bash ./scripts/evaluate_bpe_4000.sh
 Step 5: Run Beam Search Optimization Experiment
 Bash
 ```
-bash scripts/beam_differ.sh
-
+bash ./scripts/beam_differ.sh
 ```
 
-# Generate the visualization plots (beam_search_analysis.png)
-
+# Generate the visualization
 ```
-python plot.py
+python ./scripts/plot.py
 ```
 
-# Findings
+# REPORT
 
 ## Part 1: Word-Level vs. BPE-Level Models
 
