@@ -1,81 +1,163 @@
 # MT Exercise 4: Byte Pair Encoding, Beam Search
 
-This repository is a starting point for the 4th and final exercise. As before, fork this repo to your own account and then clone it into your preferred directory.
+We have extended this repository to support the **English-to-Romanian (en-ro)** translation task:
 
----
+#### 1. Configuration Files (`configs/`)
+* `word_level_en-ro.yaml`: Configuration for the baseline Word-level model (Vocabulary size: 2000).
+* `bpe_level_en-ro.yaml`: Configuration for the dynamic BPE model (Vocabulary size: 2000).
+* `bpe_4000_en-ro.yaml`: Configuration for the enlarged dynamic BPE model (Vocabulary size: 4000).
 
-## Requirements
+#### 2. Bash Scripts (`scripts/`)
+We created specific scripts for training, evaluating, and running advanced search experiments:
 
-- Python 3.10 must be installed. The command `python3` (or `python` on Windows) should be available from your terminal or command prompt.
-- `virtualenv` must be installed. Install it with:
+| Script Name | Usage & Purpose |
+|---|---|
+| `./scripts/train_bpe.sh` | Trains the specified BPE model for Vocabulary size: 2000. |
+| `./scripts/train_bpe_4000.sh` | Trains the specified BPE model for Vocabulary size: 4000. |
+| `./scripts/evaluate_word.sh` | Translates the test set and computes the SacreBLEU score for the Word-level model. |
+| `./scripts/evaluate_bpe_2000.sh` | Translates the test set and computes the SacreBLEU score for BPE 2000 models. |
+| `./scripts/evaluate_bpe_4000.sh` | Translates the test set and computes the SacreBLEU score for BPE 4000 models. |
+| `./scripts/beam_differ.sh` | Automatically runs the BPE 4000 model （the best model）10 times with `beam_size` from 1 to 10, calculating BLEU scores and generation times, and saving results to a CSV file. |
 
-  ```bash
-  pip install virtualenv
+### Updated Step-by-Step Execution Guide
 
-macOS/Linux users: No special setup needed; shell scripts should run normally.
+To reproduce our full results, please follow these updated steps in your terminal:
 
-Windows users: Either use Windows Subsystem for Linux (WSL) or a Unix-compatible shell like Git Bash.
-If you're using PowerShell or Command Prompt, manual setup is required.
+#### Step 1: Initialize Environment & Activate
 
-### Setup Instructions
+```
+./scripts/make_virtualenv.sh
+source venvs/torch3/bin/activate
+```
 
-## For macOS / Linux / WSL / Git Bash users
+Step 2: Download English-Romanian Data and proprecessing
 
-Clone your fork of the repository + Create a virtual environment:
-   ```
-   git clone https://github.com/[your-username]/mt-exercise-4
-   cd mt-exercise-4 
+```
+python ./scripts/download_huggingface_data.py --src en --trg ro --out data
+```
+dont forget to download moses
+```
+python ./scripts/download_moses.sh
+```
+and use Moses scripts to tokenize and clean the raw data, then build the word vocabulary:
+```
+cat data/train.100k.en | ./scripts/tokenizer.perl -l en > data/train.100k.tok.en
+cat data/train.100k.ro | ./scripts/tokenizer.perl -l ro > data/train.100k.tok.ro
+cat data/dev.en | ./scripts/tokenizer.perl -l en > data/dev.tok.en
+cat data/dev.ro | ./scripts/tokenizer.perl -l ro > data/dev.tok.ro
 
-   ```
-    ./scripts/make_virtualenv.sh
+./scripts/clean-corpus-n.perl data/train.100k.tok en ro data/train.100k.clean 1 100
 
-Important: Then activate the env by executing the source command that is output by the shell script above.
+python -m joeynmt build_vocab configs/word_level_en-ro.yaml --output_path data/vocab.txt
+```
+For BPE models, we learn a joint vocabulary from both languages and clean the frequency counts:
+```
+cat data/train.100k.en data/train.100k.ro > data/train.joint
 
-Install required dependencies - Follow the instructions provided in the exercise PDF.
+subword-nmt learn-bpe -s 2000 --total-symbols < data/train.joint > data/bpe.codes.2000
+subword-nmt apply-bpe -c data/bpe.codes.2000 < data/train.joint | subword-nmt get-vocab > data/vocab.2000.raw
+cut -d ' ' -f 1 data/vocab.2000.raw > data/vocab.bpe.2000
 
-Download data:
+subword-nmt learn-bpe -s 4000 --total-symbols < data/train.joint > data/bpe.codes.4000
+subword-nmt apply-bpe -c data/bpe.codes.4000 < data/train.joint | subword-nmt get-vocab > data/vocab.4000.raw
+cut -d ' ' -f 1 data/vocab.4000.raw > data/vocab.bpe.4000
 
-       python ./scripts/download_huggingface_data.py --src en --trg nl --out data
+rm data/vocab.2000.raw data/vocab.4000.raw data/train.joint
+```
 
-You can choose any supported direction except `de-en`. Good options are `en-nl`, `en-it`, `en-ro`, `nl-en`, `it-en`, or `ro-en`.
+Step 3: Train the Models
+To train the Word-level model, use the default script (ensure the config path inside points to word_level_en-ro.yaml). 
 
+```
+bash ./scripts/train_word.sh
+```
 
-Train the model:
+For BPE models, run:
 
-       ./scripts/train.sh
+```
+bash ./scripts/train_bpe.sh
+bash ./scripts/train_bpe_4000.sh
+```
+Step 4: Evaluate and Compute BLEU
 
-*the training process can be interrupted at any time. The best checkpoint will always be saved automatically.
+```
+bash ./scripts/evaluate_word.sh
+bash ./scripts/evaluate_bpe_2000.sh
+bash ./scripts/evaluate_bpe_4000.sh
+```
 
-Evaluate the model:
+Step 5: Run Beam Search Optimization Experiment
+Bash
+```
+bash scripts/beam_differ.sh
 
-       ./scripts/evaluate.sh
+```
 
-## For Windows (Command Prompt / PowerShell users)
-Manually create and activate a virtual environment:
+# Generate the visualization plots (beam_search_analysis.png)
 
-        python -m venv mt_env
-        mt_env\Scripts\activate
+```
+python plot.py
+```
 
-Note: The make_virtualenv.sh script will not work in native Windows shells.
+# Findings
 
-Manually download the dataset
+## Part 1: Word-Level vs. BPE-Level Models
 
-Use the Python downloader script directly, for example:
+### 1. BLEU Score Results
+| Model | Level | Vocab Size | Test BLEU |
+|---|---|---|---|
+| Model (a) | Word | 2000 | 6.6 |
+| Model (b) | BPE | 2000 | 17.9 |
+| Model (c) | BPE | 4000 | 18.8 |
 
-       python scripts/download_huggingface_data.py --src en --trg nl --out data
+### 2. Main Findings (My Observations)
+* **Word-level model is very bad (BLEU 6.6).** Because the vocabulary size is limited to 2000, many words become `<unk>`. The translation is broken.
+* **BPE models are much better.** BPE breaks rare words into smaller subword pieces. There are no `<unk>` tokens anymore. So the BLEU score jumps up to 17.9 and 18.8.
+* **Larger BPE vocabulary helps.** When vocabulary increases from 2000 to 4000, BLEU increases from 17.9 to 18.8. A larger vocabulary keeps high-frequency words complete. The sentences become cleaner and more natural.
 
-If you want a different language pair, replace `--src` and `--trg` with one of the supported directions listed above.
+### 3. Manual Check
 
-Modify, train, and evaluate
-Once setup is complete, use the instructions in the exercise PDF to run training and evaluation (either by adapting the .sh scripts manually, or by using Git Bash/WSL).
+run command
 
-#### Notes for Windows Users
+```
+paste -d "\n" <(sed 's/^/[SRC]: /' data/test.en) \
+             <(sed 's/^/[REF]: /' data/test.ro) \
+             <(sed 's/^/[Word]: /' translations/word_level_en-ro/test.word_level_en-ro.ro) \
+             <(sed 's/^/[BPE2k]: /' translations/bpe_level_en-ro/test.bpe_level_en-ro.ro) \
+             <(sed 's/^/[BPE4k]: /' translations/bpe_4000_en-ro/test.bpe_4000_en-ro.ro) | head -n 10
+```
 
-  Using Git Bash or WSL is highly recommended for compatibility.
+we get
+#### Example 1
+* **[SRC]:** Several years ago here at TED, Peter Skillman introduced a design challenge called the marshmallow challenge.
+* **[REF]:** Acum câțiva ani în urmă, aici la TED, Peter Skillman a prezentat o problemă de design numită problema bezelei.
+* **[Word]:** Acum trei ani la TED, <unk> <unk> <unk> o <unk> <unk> <unk> <unk> <unk>
+* **[BPE2k]:** Acum câţiva ani la TED, Peter Skillman a introdus la TED, Peter Skillman a introdus la provocare.
+* **[BPE4k]:** Acum, ani, acum ani aici la TED, Peter Skillman a prezentat o provocare de design numită provocare de marchine.
 
-  If using native PowerShell or Command Prompt:
+#### Example 2
+* **[SRC]:** And the idea's pretty simple:
+* **[REF]:** Și ideea este destul de simplă.
+* **[Word]:** Şi <unk> destul de <unk>
+* **[BPE2k]:** Iar ideea e destul de simplu.
+* **[BPE4k]:** Iar ideea e destul de simplu.
+* **Source:** Several years ago here at TED, Peter Skillman introduced a design challenge called the marshmallow challenge.
+* **Reference:** Acum câțiva ani în urmă, aici la TED, Peter Skillman a prezentat o problemă de design numită problema bezelei.
+* **Word Model (a):** Acum câțiva ani în `<unk>` aici la TED , Peter `<unk>` a `<unk>` o `<unk>` de design numită `<unk>` `<unk>` .
+* **BPE 2000 (b):** Acum câțiva ani în urmă , aici la TED , Peter Skill@@ man a prezentat o problemă de design numită problema beze@@ lei .
+* **BPE 4000 (c):** Acum câțiva ani în urmă , aici la TED , Peter Skillman a prezentat o problemă de design numită problema bezelei.
 
-  Manual recreation of shell script steps will be necessary.
+#### Finding
 
-  Always activate your virtual environment before running any training or evaluation steps.
+1. **Word-level Model (a) has a massive OOV problem:**
+   * In Example 1, the word model outputs eight `<unk>` tokens in a row. 
+   * It translates "Several years ago" incorrectly into "Acum trei ani" (Three years ago).
+   * In Example 2, even basic words like "idea" and "simple" become `<unk>`. The sentence is impossible to read.
 
+2. **BPE 2000 Model (b) eliminates `<unk>` but has repeating bugs:**
+   * It has zero `<unk>` tokens. It successfully translates the name "Peter Skillman" and words like "idea" and "simplu".
+   * However, in Example 1, it gets stuck in a loop: it repeats "la TED, Peter Skillman a introdus" twice. This is a common hallucination bug in small subword models.
+
+3. **BPE 4000 Model (c) gives the best vocabulary balance:**
+   * It does not repeat words like BPE 2000. It translates "design challenge" cleanly into "provocare de design".
+   * It struggles with rare words like "marshmallow" (translates it to the nonsensical "marchine"), but its grammar and sentence structure are the most natural and clean among all three models.
