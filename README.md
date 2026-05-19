@@ -139,11 +139,6 @@ we get
 * **[Word]:** Şi <unk> destul de <unk>
 * **[BPE2k]:** Iar ideea e destul de simplu.
 * **[BPE4k]:** Iar ideea e destul de simplu.
-* **Source:** Several years ago here at TED, Peter Skillman introduced a design challenge called the marshmallow challenge.
-* **Reference:** Acum câțiva ani în urmă, aici la TED, Peter Skillman a prezentat o problemă de design numită problema bezelei.
-* **Word Model (a):** Acum câțiva ani în `<unk>` aici la TED , Peter `<unk>` a `<unk>` o `<unk>` de design numită `<unk>` `<unk>` .
-* **BPE 2000 (b):** Acum câțiva ani în urmă , aici la TED , Peter Skill@@ man a prezentat o problemă de design numită problema beze@@ lei .
-* **BPE 4000 (c):** Acum câțiva ani în urmă , aici la TED , Peter Skillman a prezentat o problemă de design numită problema bezelei.
 
 #### Finding
 
@@ -187,17 +182,17 @@ The table below shows the results of our 10 translation iterations using the BPE
 
 ### 2.Cost-Effectiveness Analysis
 
-To analyze the exact runtime trade-off, we define a quantitative efficiency metric. We select **Beam Size = 5** as our baseline anchor point（why choose 5？I also want to know why）:
+To analyze the exact runtime trade-off, we define a quantitative efficiency metric. We select **Beam Size = 5** as our baseline anchor point（why choose 5？good question）:
 
 $$\text{Efficiency} = \frac{\Delta \text{BLEU}}{\Delta \text{Time}} = \frac{\text{BLEU}_K - \text{BLEU}_5}{\text{Time}_K - \text{Time}_5}$$
 
 ### 3. Findings:
 
-1. **The Cost-Effective Zone ($K < 5$):**
+1. **$K < 5$:**
    * **$K = 2$ ($+0.0068$):** This is the faster alternative. It cuts the decoding time by nearly 50% while losing only 0.4 BLEU.
    * **$K = 3$ ($+0.0042$) & $K = 4$ ($+0.0100$):** These settings show excellent efficiency. They save significant time (30s to 48s) and maintain a very high translation quality.
 
-2. **The Saturation & Waste Zone ($K > 5$):**
+2. **$K > 5$:**
    * **$K = 6$ ($0.0000$):** It adds 72 seconds of computation but brings exactly 0.0 BLEU improvement.
    * **$K = 7$ ($+0.0011$):** It reaches the global peak BLEU (18.9). However, the marginal gain is extremely low (spending 87 extra seconds for just 0.1 BLEU).
    * **$K = 8, 9, 10$ (Negative Values):** These settings create negative efficiency. The time increases drastically (up to 309s), but the BLEU score drops back to 18.7. This is because an excessively large beam size introduces search errors and shorter translations.
