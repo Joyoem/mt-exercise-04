@@ -161,3 +161,49 @@ we get
 3. **BPE 4000 Model (c) gives the best vocabulary balance:**
    * It does not repeat words like BPE 2000. It translates "design challenge" cleanly into "provocare de design".
    * It struggles with rare words like "marshmallow" (translates it to the nonsensical "marchine"), but its grammar and sentence structure are the most natural and clean among all three models.
+
+## Part 2: Beam Search and Beam Size Optimization
+
+### 1. Empirical Results
+The table below shows the results of our 10 translation iterations using the BPE 4000 model:
+
+| Beam Size ($K$) | Test BLEU Score | Translation Time (seconds) |
+|:---:|:---:|:---:|
+| 1 (Greedy) | 17.7 | 146.0 |
+| 2 | 18.4 | 66.0 |
+| 3 | 18.6 | 77.0 |
+| 4 | 18.5 | 95.0 |
+| 5 (Baseline) | 18.8 | 125.0 |
+| 6 | 18.8 | 197.0 |
+| 7 | 18.9 | 212.0 |
+| 8 | 18.7 | 264.0 |
+| 9 | 18.7 | 309.0 |
+| 10 | 18.7 | 304.0 |
+
+---
+#### Chart 1: Impact on BLEU Score
+![Beam Size vs BLEU Score](beam_bleu.png)
+
+#### Chart 2: Impact on Translation Time
+![Beam Size vs Translation Time](beam_time.png)
+
+### 2.Cost-Effectiveness Analysis
+
+To analyze the exact runtime trade-off, we define a quantitative efficiency metric. We select **Beam Size = 5** as our baseline anchor point（why choose 5？I also want to know why）:
+
+$$\text{Efficiency} = \frac{\Delta \text{BLEU}}{\Delta \text{Time}} = \frac{\text{BLEU}_K - \text{BLEU}_5}{\text{Time}_K - \text{Time}_5}$$
+
+### 3. Findings:
+
+1. **The Cost-Effective Zone ($K < 5$):**
+   * **$K = 2$ ($+0.0068$):** This is the faster alternative. It cuts the decoding time by nearly 50% while losing only 0.4 BLEU.
+   * **$K = 3$ ($+0.0042$) & $K = 4$ ($+0.0100$):** These settings show excellent efficiency. They save significant time (30s to 48s) and maintain a very high translation quality.
+
+2. **The Saturation & Waste Zone ($K > 5$):**
+   * **$K = 6$ ($0.0000$):** It adds 72 seconds of computation but brings exactly 0.0 BLEU improvement.
+   * **$K = 7$ ($+0.0011$):** It reaches the global peak BLEU (18.9). However, the marginal gain is extremely low (spending 87 extra seconds for just 0.1 BLEU).
+   * **$K = 8, 9, 10$ (Negative Values):** These settings create negative efficiency. The time increases drastically (up to 309s), but the BLEU score drops back to 18.7. This is because an excessively large beam size introduces search errors and shorter translations.
+
+### 3. Final Take and Selection Strategy
+* For **maximum quality**, I would choose **`Beam Size = 5`** or **`7`**. 
+* For **real-time service**, I would choose **`Beam Size = 2`** or **`3`**. They harvest 98% of the model's potential quality while running twice as fast, offering the highest return on investment.
